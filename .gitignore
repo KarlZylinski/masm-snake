@@ -3,4 +3,6 @@
 *.o
 *.pdb
 *.exe
+*.c
+*.lst
 .vs/
