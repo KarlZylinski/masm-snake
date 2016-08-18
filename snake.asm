@@ -16,14 +16,17 @@ section .text
 move_head:
     push ebp
     mov ebp, esp
-    push edx
 
+    ; create a new tail movement dir on the block we're moving away from
     call encode_movement_dir
-    mov dl, al
-    call head_index_from_pos
-    add eax, tail_directions
-    mov byte [eax], dl
+    mov bl, al
+    mov ecx, dword [head_x]
+    mov edx, dword [head_y]
+    call index_from_pos
+    add eax, map
+    mov byte [eax], bl
 
+    ; add movement dir to head pos
     mov eax, dword [head_x]
     add eax, dword [mov_dir_x]
     mov dword [head_x], eax
@@ -36,48 +39,47 @@ move_head:
     call _xdisp_set
     add esp, 3*4
 
-    pop edx
+    ; check for food
+    mov ecx, dword [head_x]
+    mov edx, dword [head_y]
+    call index_from_pos
+    add eax, map
+    cmp byte [eax], 5 ; 5 means theres food there
+    jne .e
+
+    ; eat food
+    mov eax, dword [food_left]
+    add eax, 2
+    mov dword [food_left], eax
+
+    .e:
+
     mov esp, ebp
     pop ebp
     ret
 
-head_index_from_pos:
+; x in ecx, y in edx
+index_from_pos:
     push ebp
     mov ebp, esp
-    push edx
+    push ebx
 
     ; index is y * pitch + x
-    mov eax, dword [head_y]
-    mov edx, board_size
-    mul edx
-    add eax, dword [head_x]
+    mov eax, edx
+    mov ebx, board_size
+    mul ebx
+    add eax, dword ecx
 
-    pop edx
+    pop ebx
     mov esp, ebp
     pop ebp
     ret
 
-tail_index_from_pos:
-    push ebp
-    mov ebp, esp
-    push edx
-
-    ; index is y * pitch + x
-    mov eax, dword [tail_y]
-    mov edx, board_size
-    mul edx
-    add eax, dword [tail_x]
-
-    pop edx
-    mov esp, ebp
-    pop ebp
-    ret
 
 move_tail:
     push ebp
     mov ebp, esp
     sub esp, 4
-    push ecx
 
     push 0
     push dword [tail_y]
@@ -85,7 +87,9 @@ move_tail:
     call _xdisp_set
     add esp, 3*4
 
-    call tail_index_from_pos
+    mov ecx, dword [tail_x]
+    mov edx, dword [tail_y]
+    call index_from_pos
     mov dword [ebp-4], eax
 
     mov ecx, eax
@@ -98,7 +102,6 @@ move_tail:
     add eax, dword [tail_y]
     mov dword [tail_y], eax
 
-    pop ecx
     mov esp, ebp
     pop ebp
     ret
@@ -121,6 +124,9 @@ tick:
     call move_head
 
     .e:
+
+    call spawn_food
+
     mov esp, ebp
     pop ebp
     ret
@@ -190,11 +196,10 @@ encode_movement_dir:
 decode_tail_move_x:
     push ebp
     mov ebp, esp
-    push edx
 
     mov eax, ecx
     mov ebx, dword [tail_x]
-    add eax, tail_directions
+    add eax, map
     mov dl, byte [eax]
     cmp dl, 3
     je .l
@@ -209,7 +214,6 @@ decode_tail_move_x:
     mov eax, -1 ; left
 
     .e:
-    pop edx
     mov esp, ebp
     pop ebp
     ret
@@ -217,10 +221,9 @@ decode_tail_move_x:
 decode_tail_move_y:
     push ebp
     mov ebp, esp
-    push edx
 
     mov eax, ecx
-    add eax, tail_directions
+    add eax, map
     mov dl, byte [eax]
     cmp dl, 0
     je .u
@@ -235,7 +238,54 @@ decode_tail_move_y:
     mov eax, -1 ; up
 
     .e:
-    pop edx
+    mov esp, ebp
+    pop ebp
+    ret
+
+spawn_food:
+    push ebp
+    mov ebp, esp
+    sub esp, 8
+
+    movss xmm0, dword [cur_time]
+    comiss xmm0, dword [spawn_next_food_at]
+    jb .e
+
+    push 1
+    rdtsc
+    and eax, 0xFF
+    mov edx, 0
+    mov ecx, board_size
+    div ecx
+    mov dword [ebp-4], edx ; y, save for index_from_pos
+    push edx ; remainder in edx
+    rdtsc
+    and eax, 0xFF
+    mov edx, 0
+    mov ecx, board_size
+    div ecx
+    mov dword [ebp-8], edx ; x, save for index_from_pos
+    push edx ; remainder in edx
+    call _xdisp_set
+    add esp, 3*4
+
+    ;; uses
+    mov ecx, dword [ebp-8] ; y
+    mov edx, dword [ebp-4] ; x
+    call index_from_pos
+    add eax, map
+    mov byte [eax], 5
+
+    ; find a time to spawn next food
+    rdtsc
+    and eax, 0xF ; max 8 sec
+    shr eax, 2 ; max 4 sec
+    add eax, 1 ; 2 - 6 sec
+    cvtsi2ss xmm0, eax
+    addss xmm0, dword [cur_time]
+    movss dword [spawn_next_food_at], xmm0
+
+    .e:
     mov esp, ebp
     pop ebp
     ret
@@ -283,7 +333,7 @@ _main:
         movss dword [cur_time], xmm0
         subss xmm0, dword [frame_start]
         comiss xmm0, dword [time_per_frame]
-        jbe .cont
+        jb .cont
         movss xmm0, dword [cur_time]
         movss dword [frame_start], xmm0
         call tick
@@ -312,5 +362,6 @@ time_per_frame: dd 0.1
 board_size equ 16
 tile_size equ 32
 tile_spacing equ 0
-food_left: dd 3
-tail_directions: times board_size*board_size db 0 ; index is pos x * board_size + y
+food_left: dd 2
+spawn_next_food_at: dd 4.0
+map: times board_size*board_size db 0 ; index is pos x * board_size + y
