@@ -13,9 +13,20 @@ extern _xdisp_time
 
 section .text
 
+%macro movd_dword 2
+    mov eax, dword [%2]
+    mov dword [%1], eax
+%endmacro
+
 move_head:
     push ebp
     mov ebp, esp
+    push ebx
+    sub esp, 8
+
+    ; save for setting new color later
+    movd_dword ebp-4, head_x
+    movd_dword ebp-8, head_y
 
     ; create a new tail movement dir on the block we're moving away from
     call encode_movement_dir
@@ -33,6 +44,58 @@ move_head:
     mov eax, dword [head_y]
     add eax, dword [mov_dir_y]
     mov dword [head_y], eax
+
+    ; check collision x
+    mov eax, dword[head_x]
+    cmp eax, 0
+    jl .die
+    cmp eax, board_size
+    jge .die
+
+    ; check collision y
+    mov eax, dword[head_y]
+    cmp eax, 0
+    jl .die
+    cmp eax, board_size
+    jge .die
+
+    ; check collision with map
+    mov ecx, dword [head_x]
+    mov edx, dword [head_y]
+    call index_from_pos
+    add eax, map
+    mov ebx, eax ; save for eat_food removal
+    cmp byte [eax], 5 ; 5 means theres food there
+    je .eat_food
+    cmp byte [eax], 0 ; nothing there
+    je .draw
+
+    .die:
+
+    mov ebx, 0xFFFFFFFF
+    .die_delay:
+    sub ebx, 1
+    cmp ebx, 0
+    jne .die_delay
+    jmp quit
+
+    ; something else here, body part? fail!
+
+    .eat_food: mov eax, dword [food_left]
+    add eax, 2
+    mov dword [food_left], eax
+    mov byte [ebx], 0 ; remove food, gfx doesn't need removing. it is killed by head gfx
+
+    .draw: 
+
+    push 0
+    push 155
+    push 0
+    push dword [ebp-8]
+    push dword [ebp-4]
+    call _xdisp_set
+    add esp, 5*4
+
     push 0
     push 255
     push 0
@@ -41,23 +104,8 @@ move_head:
     call _xdisp_set
     add esp, 5*4
 
-    ; check for food
-    mov ecx, dword [head_x]
-    mov edx, dword [head_y]
-    call index_from_pos
-    add eax, map
-    cmp byte [eax], 5 ; 5 means theres food there
-    jne .e
-
-    mov byte [eax], 0 ; remove food, gfx doesn't need removing. it is killed by head gfx
-
-    ; eat food
-    mov eax, dword [food_left]
-    add eax, 2
-    mov dword [food_left], eax
-
     .e:
-
+    pop ebx
     mov esp, ebp
     pop ebp
     ret
@@ -85,6 +133,7 @@ move_tail:
     mov ebp, esp
     sub esp, 4
 
+    ; hide tail
     push 0
     push 0
     push 0
@@ -93,20 +142,28 @@ move_tail:
     call _xdisp_set
     add esp, 5*4
 
+    ; find index
     mov ecx, dword [tail_x]
     mov edx, dword [tail_y]
     call index_from_pos
     mov dword [ebp-4], eax
 
+    ; mov x pos by tail movement dir in map
     mov ecx, eax
     call decode_tail_move_x
     add eax, dword [tail_x]
     mov dword [tail_x], eax
 
+    ; mov y pos by tail movement dir in map
     mov ecx, dword [ebp-4]
     call decode_tail_move_y
     add eax, dword [tail_y]
     mov dword [tail_y], eax
+
+    ; clear in map so food can spawn there etc
+    mov eax, [ebp-4]
+    add eax, map
+    mov byte [eax], 0
 
     mov esp, ebp
     pop ebp
@@ -252,22 +309,34 @@ spawn_food:
     push ebp
     mov ebp, esp
     sub esp, 4
+    push ebx
 
     movss xmm0, dword [cur_time]
     comiss xmm0, dword [spawn_next_food_at]
     jb .e
 
-    ; get a number on [0, number of tiles]
+    mov ebx, 10 ; try placing n times
+    .try_get_num:
+    ; get a number on [0, number of tiles],
     rdtsc
     and eax, 0xFFF
     mov edx, 0
     mov ecx, board_size*board_size
     div ecx
 
-    mov eax, edx ; index on map
+    mov eax, edx
     add eax, map
-    mov byte [eax], 5 ; 5 means food here
+    mov cl, byte [eax]
+    cmp cl, 0
+    je .free
 
+    sub ebx, 1 ; count down number of tries
+    cmp ebx, 0
+    jg .try_get_num
+    jmp .e ; give up
+
+    .free:
+    mov byte [eax], 5 ; 5 means food here
     push 0
     push 0
     push 255
@@ -290,14 +359,10 @@ spawn_food:
     movss dword [spawn_next_food_at], xmm0
 
     .e:
+    pop ebx
     mov esp, ebp
     pop ebp
     ret
-
-%macro movd_dword 2
-    mov eax, dword [%2]
-    mov dword [%1], eax
-%endmacro
 
 _main:
     sub esp, 4
@@ -346,8 +411,10 @@ _main:
         cmp eax, 0
         jne .window_loop
 
+    quit: mov eax, 0
     push 0
     call _ExitProcess@4
+    ret
 
 section .data
 window_title: db "Snake!", 0
