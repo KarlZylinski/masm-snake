@@ -121,7 +121,6 @@ tick:
     pop ebp
     ret
 
-
 read_input:
     push ebp
     mov ebp, esp
@@ -164,19 +163,19 @@ encode_movement_dir:
 
     cmp dword [mov_dir_x], 0
     je .y
-    jl .nx
+    jl .l
     mov eax, 1 ;right
     jmp .e
-    .nx:
+    .l:
     mov eax, 3 ;left
     jmp .e
     .y:
     cmp dword [mov_dir_y], 0
     je .e
-    jl .ny
+    jg .d
     mov eax, 0 ;up
     jmp .e
-    .ny:
+    .d:
     mov eax, 2 ;down
 
     .e:
@@ -243,18 +242,12 @@ decode_tail_move_y:
 
 _main:
     sub esp, 4
-
-    mov dword [mov_dir_x], -1
-    call encode_movement_dir
-    mov dl, al
+    mov dword [mov_dir_x], 1
 
     movd_dword head_x, start_pos_x
     movd_dword head_y, start_pos_y
     movd_dword tail_x, start_pos_x
     movd_dword tail_y, start_pos_y
-    call tail_index_from_pos
-    add eax, tail_directions
-    mov byte [eax], dl
 
     push 0
     push 255
