@@ -76,7 +76,8 @@ tail_index_from_pos:
 move_tail:
     push ebp
     mov ebp, esp
-    push ebx
+    sub esp, 4
+    push ecx
 
     push 0
     push dword [tail_y]
@@ -84,17 +85,20 @@ move_tail:
     call _xdisp_set
     add esp, 3*4
 
-    mov ebx, dword [tail_x]
+    call tail_index_from_pos
+    mov dword [ebp-4], eax
+
+    mov ecx, eax
     call decode_tail_move_x
-    add ebx, eax
-    mov dword [tail_x], ebx
+    add eax, dword [tail_x]
+    mov dword [tail_x], eax
 
-    mov ebx, dword [tail_y]
+    mov ecx, dword [ebp-4]
     call decode_tail_move_y
-    add ebx, eax
-    mov dword [tail_y], ebx
+    add eax, dword [tail_y]
+    mov dword [tail_y], eax
 
-    pop ebx
+    pop ecx
     mov esp, ebp
     pop ebp
     ret
@@ -188,7 +192,8 @@ decode_tail_move_x:
     mov ebp, esp
     push edx
 
-    call tail_index_from_pos
+    mov eax, ecx
+    mov ebx, dword [tail_x]
     add eax, tail_directions
     mov dl, byte [eax]
     cmp dl, 3
@@ -214,14 +219,14 @@ decode_tail_move_y:
     mov ebp, esp
     push edx
 
-    call tail_index_from_pos
+    mov eax, ecx
     add eax, tail_directions
     mov dl, byte [eax]
     cmp dl, 0
     je .u
     cmp dl, 2
     je .d
-    mov eax, 0 ; no x movement
+    mov eax, 0 ; no y movement
     jmp .e
     .d:
     mov eax, 1 ; down
@@ -252,8 +257,8 @@ _main:
     push 0
     push 255
     push 0
-    push 4
-    push 64
+    push tile_spacing
+    push tile_size
     push board_size
     push window_title
     call _xdisp_init
@@ -303,7 +308,9 @@ mov_dir_x: dd 0
 mov_dir_y: dd 0
 frame_start: dd 0.0
 cur_time: dd 0.0
-time_per_frame: dd 0.25
-board_size equ 8
+time_per_frame: dd 0.1
+board_size equ 16
+tile_size equ 32
+tile_spacing equ 0
 food_left: dd 3
 tail_directions: times board_size*board_size db 0 ; index is pos x * board_size + y
