@@ -1,3 +1,3 @@
 call "%VS140COMNTOOLS%..\..\VC\vcvarsall.bat"
-nasm -fwin32 snake.asm -g -Fvc8 -lsnake.lst
-link /debug snake.obj xdisp.lib /entry:main
+nasm -fwin32 snake.asm -g -Fcv8 -lsnake.lst
+link /debug /INCREMENTAL:NO snake.obj xdisp.lib /entry:main
