@@ -245,42 +245,38 @@ decode_tail_move_y:
 spawn_food:
     push ebp
     mov ebp, esp
-    sub esp, 8
+    sub esp, 4
 
     movss xmm0, dword [cur_time]
     comiss xmm0, dword [spawn_next_food_at]
     jb .e
 
+    ; get a number on [0, number of tiles]
+    rdtsc
+    and eax, 0xFFF
+    mov edx, 0
+    mov ecx, board_size*board_size
+    div ecx
+
+    mov eax, edx ; index on map
+    add eax, map
+    mov byte [eax], 5 ; 5 means food here
+
     push 1
-    rdtsc
-    and eax, 0xFF
+    mov eax, edx
     mov edx, 0
     mov ecx, board_size
     div ecx
-    mov dword [ebp-4], edx ; y, save for index_from_pos
-    push edx ; remainder in edx
-    rdtsc
-    and eax, 0xFF
-    mov edx, 0
-    mov ecx, board_size
-    div ecx
-    mov dword [ebp-8], edx ; x, save for index_from_pos
-    push edx ; remainder in edx
+    push eax ; y in result
+    push edx ; x in remainder
     call _xdisp_set
     add esp, 3*4
-
-    ;; uses
-    mov ecx, dword [ebp-8] ; y
-    mov edx, dword [ebp-4] ; x
-    call index_from_pos
-    add eax, map
-    mov byte [eax], 5
 
     ; find a time to spawn next food
     rdtsc
     and eax, 0xF ; max 8 sec
     shr eax, 2 ; max 4 sec
-    add eax, 1 ; 2 - 6 sec
+    add eax, 1 ; 1 - 5 sec
     cvtsi2ss xmm0, eax
     addss xmm0, dword [cur_time]
     movss dword [spawn_next_food_at], xmm0
