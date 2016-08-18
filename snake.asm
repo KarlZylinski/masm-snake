@@ -33,11 +33,13 @@ move_head:
     mov eax, dword [head_y]
     add eax, dword [mov_dir_y]
     mov dword [head_y], eax
-    push 1
+    push 0
+    push 255
+    push 0
     push dword [head_y]
     push dword [head_x]
     call _xdisp_set
-    add esp, 3*4
+    add esp, 5*4
 
     ; check for food
     mov ecx, dword [head_x]
@@ -46,6 +48,8 @@ move_head:
     add eax, map
     cmp byte [eax], 5 ; 5 means theres food there
     jne .e
+
+    mov byte [eax], 0 ; remove food, gfx doesn't need removing. it is killed by head gfx
 
     ; eat food
     mov eax, dword [food_left]
@@ -82,10 +86,12 @@ move_tail:
     sub esp, 4
 
     push 0
+    push 0
+    push 0
     push dword [tail_y]
     push dword [tail_x]
     call _xdisp_set
-    add esp, 3*4
+    add esp, 5*4
 
     mov ecx, dword [tail_x]
     mov edx, dword [tail_y]
@@ -174,19 +180,19 @@ encode_movement_dir:
     cmp dword [mov_dir_x], 0
     je .y
     jl .l
-    mov eax, 1 ;right
+    mov eax, 2 ;right
     jmp .e
     .l:
-    mov eax, 3 ;left
+    mov eax, 4 ;left
     jmp .e
     .y:
     cmp dword [mov_dir_y], 0
     je .e
     jg .d
-    mov eax, 0 ;up
+    mov eax, 1 ;up
     jmp .e
     .d:
-    mov eax, 2 ;down
+    mov eax, 3 ;down
 
     .e:
     mov esp, ebp
@@ -201,9 +207,9 @@ decode_tail_move_x:
     mov ebx, dword [tail_x]
     add eax, map
     mov dl, byte [eax]
-    cmp dl, 3
+    cmp dl, 4
     je .l
-    cmp dl, 1
+    cmp dl, 2
     je .r
     mov eax, 0 ; no x movement
     jmp .e
@@ -225,9 +231,9 @@ decode_tail_move_y:
     mov eax, ecx
     add eax, map
     mov dl, byte [eax]
-    cmp dl, 0
+    cmp dl, 1
     je .u
-    cmp dl, 2
+    cmp dl, 3
     je .d
     mov eax, 0 ; no y movement
     jmp .e
@@ -262,7 +268,9 @@ spawn_food:
     add eax, map
     mov byte [eax], 5 ; 5 means food here
 
-    push 1
+    push 0
+    push 0
+    push 255
     mov eax, edx
     mov edx, 0
     mov ecx, board_size
@@ -270,7 +278,7 @@ spawn_food:
     push eax ; y in result
     push edx ; x in remainder
     call _xdisp_set
-    add esp, 3*4
+    add esp, 5*4
 
     ; find a time to spawn next food
     rdtsc
@@ -300,21 +308,20 @@ _main:
     movd_dword tail_x, start_pos_x
     movd_dword tail_y, start_pos_y
 
-    push 0
-    push 255
-    push 0
     push tile_spacing
     push tile_size
     push board_size
     push window_title
     call _xdisp_init
-    add esp, 7*4
+    add esp, 4*4
 
-    push 1
+    push 0
+    push 255
+    push 0
     push dword [head_x]
     push dword [head_y]
     call _xdisp_set
-    add esp, 3*4
+    add esp, 5*4
 
     call _xdisp_time
     fstp dword [ebp-4]
