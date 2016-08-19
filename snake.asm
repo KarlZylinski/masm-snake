@@ -10,6 +10,7 @@ extern _xdisp_up_held
 extern _xdisp_right_held
 extern _xdisp_down_held
 extern _xdisp_time
+extern _xdisp_sleep
 
 section .text
 
@@ -74,10 +75,10 @@ move_head:
 
     mov ebx, 0xFFFFFFFF
     .die_delay:
-    sub ebx, 1
-    cmp ebx, 0
-    jne .die_delay
-    jmp quit
+        sub ebx, 1
+        cmp ebx, 0
+        jne .die_delay
+        jmp quit
 
     ; something else here, body part? fail!
 
@@ -317,23 +318,23 @@ spawn_food:
 
     mov ebx, 10 ; try placing n times
     .try_get_num:
-    ; get a number on [0, number of tiles],
-    rdtsc
-    and eax, 0xFFF
-    mov edx, 0
-    mov ecx, board_size*board_size
-    div ecx
+        ; get a number on [0, number of tiles],
+        rdtsc
+        and eax, 0xFFF
+        mov edx, 0
+        mov ecx, board_size*board_size
+        div ecx
 
-    mov eax, edx
-    add eax, map
-    mov cl, byte [eax]
-    cmp cl, 0
-    je .free
+        mov eax, edx
+        add eax, map
+        mov cl, byte [eax]
+        cmp cl, 0
+        je .free
 
-    sub ebx, 1 ; count down number of tries
-    cmp ebx, 0
-    jg .try_get_num
-    jmp .e ; give up
+        sub ebx, 1 ; count down number of tries
+        cmp ebx, 0
+        jg .try_get_num
+        jmp .e ; give up
 
     .free:
     mov byte [eax], 5 ; 5 means food here
@@ -406,6 +407,9 @@ _main:
         movss dword [frame_start], xmm0
         call tick
         .cont:
+        push 1
+        call _xdisp_sleep
+        add esp, 4
         call _xdisp_process_events
         call _xdisp_is_window_open
         cmp eax, 0
@@ -433,5 +437,5 @@ board_size equ 16
 tile_size equ 32
 tile_spacing equ 0
 food_left: dd 2
-spawn_next_food_at: dd 4.0
+spawn_next_food_at: dd 1.0
 map: times board_size*board_size db 0 ; index is pos x * board_size + y
